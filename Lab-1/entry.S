@@ -1,12 +1,17 @@
+# 每个 hart 分配独立的 4KB 栈，然后 call start
 .section .text
 .global _entry
 _entry:
-    la sp, stacks  // sp（栈指针）= stacks 的地址
+    csrr a0, mhartid
+    la sp, stacks
     li t0, 4096
-    add sp, sp, t0
-    call start     // 调用 C 函数 start()
+    addi a0, a0, 1
+    mul a0, a0, t0
+    add sp, sp, a0
+    call start
 
 .section .bss
-.align 12          // 按 2^12 = 4096 字节对齐
+.align 12
+.global stacks
 stacks:
-    .space 4096
+    .space 4096 * 8
