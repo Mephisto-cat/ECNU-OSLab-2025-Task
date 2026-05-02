@@ -1,6 +1,6 @@
-# 每个 hart 分配独立的 4KB 栈，然后 call start
 .section .text
 .global _entry
+
 _entry:
     csrr a0, mhartid
     la sp, stacks

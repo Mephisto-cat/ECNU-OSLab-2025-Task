@@ -3,8 +3,8 @@
 
 #include "types.h"
 
-void  kinit(void);
-void *kalloc(void);
+void  kinit();
+void *kalloc();
 void  kfree(void *pa);
 
 #endif
