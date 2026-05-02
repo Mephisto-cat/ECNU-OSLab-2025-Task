@@ -2,7 +2,7 @@
 #include "riscv.h"
 #include "uart.h"
 
-void main(void) {
+void main() {
     uartinit();
 
     if (r_tp() == 0) {
