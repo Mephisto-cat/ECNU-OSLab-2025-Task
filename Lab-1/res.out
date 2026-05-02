@@ -1,0 +1,20 @@
+qemu-system-riscv64 \
+	-machine virt \
+	-bios none \
+	-kernel kernel-qemu.elf \
+	-m 128M \
+	-smp 2 \
+	-nographic
+Hello, World!
+Hello, OS!
+=== printf test ===
+%d: -42
+%u: 12345
+%x: dead
+%p: 0x0000000080000000
+%s: hello
+%c: X
+%%: 100%
+=== done ===
+QEMU: Terminated
+
