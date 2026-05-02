@@ -2,18 +2,23 @@
 #include "riscv.h"
 #include "uart.h"
 
-void main(void)
-{
-    uint64 hartid;
-
+void main(void) {
     uartinit();
-    hartid = r_tp();
 
-    printf("\n");
-    printf("Lab1 kernel entered main() on hart %d\n", (int)hartid);
-    printf("Hello, world from S-mode!\n");
-    printf("UART MMIO base = %p\n", (void *)0x10000000UL);
-    printf("This printf is protected by a spinlock.\n");
+    if (r_tp() == 0) {
+        printf("Hello, World!\n");
+        printf("=== printf test ===\n");
+        printf("%%d: %d\n", -42);
+        printf("%%u: %u\n", 12345U);
+        printf("%%x: %x\n", 0xdeadU);
+        printf("%%p: %p\n", (void *)0x80000000UL);
+        printf("%%s: %s\n", "hello");
+        printf("%%c: %c\n", 'X');
+        printf("%%%%: 100%%\n");
+        printf("=== done ===\n");
+    } else {
+        printf("Hello, OS!\n");
+    }
 
     for (;;)
         wfi();

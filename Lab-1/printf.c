@@ -4,56 +4,60 @@
 #include "types.h"
 #include "uart.h"
 
-static struct spinlock pr_lock;
-static int pr_lock_inited;
-
+// 十六进制数字表
 static const char digits[] = "0123456789abcdef";
 
-static void putc(int c)
-{
+// 发一个字符。串口终端需要 \r\n 表示换行
+static void putc(int c) {
     if (c == '\n')
-        uartputc_sync('\r');    // 串口需要 \r\n
-    uartputc_sync(c);
+        my_put('\r');
+    my_put(c);
 }
 
-static void printint(int64 xx, int base, int sign)
-{
+/* 按指定进制打印整数
+   base: 10=十进制, 16=十六进制
+   sign: 1=负号, 0=无负号 
+*/
+static void printint(int64 xx, int base, int sign) {
     char buf[32];
-    int i;
     uint64 x;
 
-    if (sign && xx < 0)
+    if (sign && xx < 0) {
         x = (uint64)(-xx);
-    else
+    } else {
         x = (uint64)xx;
+    }
 
-    i = 0;
+    int i = 0;
     do {
         buf[i++] = digits[x % base];
         x /= base;
     } while (x != 0);
 
-    if (sign && xx < 0)
+    if (sign && xx < 0) {
         buf[i++] = '-';
+    }
 
-    while (--i >= 0)
+    while (--i >= 0) {
         putc(buf[i]);
+    }
 }
 
-static void printptr(uint64 x)
-{
-    int i;
+// 打印指针：16 位十六进制 + 0x 前缀
+static void printptr(uint64 x) {
     putc('0');
     putc('x');
-    for (i = 0; i < 16; i++) {
+    for (int i = 0; i < 16; i++) {
         int shift = (15 - i) * 4;
         putc(digits[(x >> shift) & 0xf]);
     }
 }
 
-// 支持 %d %u %x %p %s %c %%
-void printf(const char *fmt, ...)
-{
+static struct spinlock pr_lock;
+static int pr_lock_inited;
+
+// 格式化输出。支持 %d %u %x %p %s %c %%
+void printf(const char *fmt, ...) {
     int c;
     const char *s;
     va_list ap;
@@ -64,7 +68,6 @@ void printf(const char *fmt, ...)
     }
 
     acquire(&pr_lock);
-
     va_start(ap, fmt);
     for (; (c = *fmt) != 0; fmt++) {
         if (c != '%') {
@@ -109,6 +112,5 @@ void printf(const char *fmt, ...)
         }
     }
     va_end(ap);
-
     release(&pr_lock);
 }
