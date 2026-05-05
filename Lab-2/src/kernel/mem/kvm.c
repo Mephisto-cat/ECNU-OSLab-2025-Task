@@ -1,8 +1,6 @@
-#include "vm.h"
-#include "kalloc.h"
-#include "memlayout.h"
-#include "page.h"
-#include "riscv.h"
+#include "mem/mod.h"
+#include "mem/type.h"
+#include "arch/method.h"
 
 uint64 *kernel_pgdir;
 volatile int kvminit_done;
@@ -16,8 +14,9 @@ static uint64 *walk(uint64 *pgdir, uint64 va, int alloc) {
             pgdir = (uint64 *)PTE2PA(*pte);
         } else if (alloc) {
             pgdir = (uint64 *)kalloc();
-            if (pgdir == 0)
+            if (pgdir == 0) {
                 return 0;
+            }
             *pte = PA2PTE((uint64)pgdir) | PTE_V;
         } else {
             return 0;
@@ -37,7 +36,7 @@ static void kvmmap(uint64 *pgdir, uint64 va, uint64 pa, uint64 sz, uint64 perm) 
     }
 }
 
-// 创建内核页表 — 映射 UART MMIO 和全部 RAM（对等映射）
+// 创建内核页表 — 映射 UART/PLIC/CLINT MMIO 和全部 RAM（对等映射）
 void kvminit() {
     kernel_pgdir = (uint64 *)kalloc();
     if (kernel_pgdir == 0) {
@@ -45,6 +44,8 @@ void kvminit() {
     }
 
     kvmmap(kernel_pgdir, UART0, UART0, PGSIZE, PTE_KERN_RW);
+    kvmmap(kernel_pgdir, PLIC, PLIC, 0x400000, PTE_KERN_RW);
+    kvmmap(kernel_pgdir, CLINT, CLINT, 0x10000, PTE_KERN_RW);
     kvmmap(kernel_pgdir, KERNBASE, KERNBASE, PHYSTOP - KERNBASE, PTE_KERN_RWX);
 
     kvminit_done = 1;

@@ -1,23 +1,18 @@
 #include <stdarg.h>
 
-#include "spinlock.h"
-#include "types.h"
-#include "uart.h"
+#include "lock/mod.h"
+#include "arch/type.h"
+#include "lib/mod.h"
 
-// 十六进制数字表
 static const char digits[] = "0123456789abcdef";
 
-// 发一个字符。串口终端需要 \r\n 表示换行
 static void putc(int c) {
-    if (c == '\n')
+    if (c == '\n') {
         my_put('\r');
+    }
     my_put(c);
 }
 
-/* 按指定进制打印整数
-   base: 10=十进制, 16=十六进制
-   sign: 1=负号, 0=无负号 
-*/
 static void printint(int64 xx, int base, int sign) {
     char buf[32];
     uint64 x;
@@ -43,7 +38,6 @@ static void printint(int64 xx, int base, int sign) {
     }
 }
 
-// 打印指针：16 位十六进制 + 0x 前缀
 static void printptr(uint64 x) {
     putc('0');
     putc('x');
@@ -56,7 +50,6 @@ static void printptr(uint64 x) {
 static struct spinlock pr_lock;
 static int pr_lock_inited;
 
-// 格式化输出。支持 %d %u %x %p %s %c %%
 void printf(const char *fmt, ...) {
     int c;
     const char *s;
@@ -76,8 +69,9 @@ void printf(const char *fmt, ...) {
         }
 
         fmt++;
-        if (*fmt == 0)
+        if (*fmt == 0) {
             break;
+        }
 
         switch (*fmt) {
         case 'd':
@@ -94,10 +88,12 @@ void printf(const char *fmt, ...) {
             break;
         case 's':
             s = va_arg(ap, const char *);
-            if (s == 0)
+            if (s == 0) {
                 s = "(null)";
-            while (*s)
+            }
+            while (*s) {
                 putc(*s++);
+            }
             break;
         case 'c':
             putc(va_arg(ap, int));

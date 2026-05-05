@@ -1,8 +1,8 @@
-#ifndef PAGE_H
-#define PAGE_H
+#pragma once
 
-#include "types.h"
+#include "arch/type.h"
 
+// 页大小
 #define PGSIZE  4096
 #define PGSHIFT 12
 
@@ -34,4 +34,9 @@
 #define SATP_SV39          (8UL << 60)
 #define MAKE_SATP(pgdir)   (SATP_SV39 | (((uint64)(pgdir)) >> 12))
 
-#endif
+// QEMU virt 平台物理内存布局
+#define UART0    0x10000000L
+#define PLIC     0x0c000000L
+#define CLINT    0x02000000L
+#define KERNBASE 0x80000000L
+#define PHYSTOP  (KERNBASE + 128 * 1024 * 1024)

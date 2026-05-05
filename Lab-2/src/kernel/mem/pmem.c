@@ -1,7 +1,6 @@
-#include "kalloc.h"
-#include "memlayout.h"
-#include "page.h"
-#include "spinlock.h"
+#include "mem/mod.h"
+#include "mem/type.h"
+#include "lock/mod.h"
 
 // 空闲页面链表节点：复用空闲页自身来存储指针
 struct run {
@@ -45,7 +44,7 @@ void *kalloc() {
 
 // 释放，插入链表节点
 void kfree(void *pa) {
-    if (((uint64)pa % PGSIZE) != 0|| (char *)pa < (char *)PGROUNDUP((uint64)&end)|| (uint64)pa >= PHYSTOP) {
+    if (((uint64)pa % PGSIZE) != 0 || (char *)pa < (char *)PGROUNDUP((uint64)&end) || (uint64)pa >= PHYSTOP) {
         return;
     }
 

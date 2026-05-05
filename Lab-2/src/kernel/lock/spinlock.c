@@ -1,5 +1,5 @@
-#include "riscv.h"
-#include "spinlock.h"
+#include "lock/mod.h"
+#include "arch/method.h"
 
 void initlock(struct spinlock *lk, const char *name) {
     lk->locked = 0;
@@ -13,8 +13,8 @@ acquire — 拿锁
 */
 void acquire(struct spinlock *lk) {
     intr_off();
-    while (__sync_lock_test_and_set(&lk->locked, 1) != 0);
-    __sync_synchronize(); // 让其他核能看到 lock 的状态
+    while (__sync_lock_test_and_set(&lk->locked, 1) != 0) {}
+    __sync_synchronize();
 }
 
 /*
