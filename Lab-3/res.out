@@ -1,0 +1,53 @@
+qemu-system-riscv64 \
+	-machine virt \
+	-bios none \
+	-kernel kernel-qemu.elf \
+	-m 128M \
+	-smp 2 \
+	-nographic
+
+
+=== Lab3: hart 0 ===
+=== Lab3: hart 1 ===
+[hart 0] kinit: free list built from 0x0000000080000000 to 0x0000000088000000
+[hart 0] kvminit: kernel page table at 0x0000000087fff000
+[hart 0] trap_kernel_init: stvec set, PLIC inited
+[hart 1] kvminithart: satp = 0x8000000000087fff, paging enabled
+[hart 0] kvminithart: satp = 0x8000000000087fff, paging enabled
+[hart 1] trap_kernel_inithart: interrupts enabled
+[hart 0] trap_kernel_inithart: interrupts enabled
+[hart 0] --- test1: basic alloc/free ---
+[hart 0] alloc  p1=0x0000000087fb8000 p2=0x0000000087fb7000
+[hart 0] expect: p1≠0, p2≠0, p1≠p2
+[hart 0] free   p1=0x0000000087fb8000 p2=0x0000000087fb7000
+[hart 0] --- test2: reuse after free ---
+[hart 0] re-alloc after free: p3=0x0000000087fb7000
+[hart 0] expect: p3==p2 (LIFO, last freed first)
+[hart 0] --- test3: zero-fill ---
+[hart 0] zero-fill check: 0/4096 bytes non-zero
+[hart 0] expect: 0
+[hart 0] dirty-then-realloc zero check: 0/4096 bytes non-zero
+[hart 0] expect: 0
+[hart 0] --- test4: kfree rejects bad addresses ---
+[hart 0] alloc after bad frees: p4=0x0000000087fb7000
+[hart 0] expect: p4≠0 (bad frees silently ignored)
+[hart 0] --- test5: exhaustion ---
+[hart 0] allocated 32686 pages before NULL
+[hart 0] expect: >1000
+[hart 0] --- test6: free-then-reuse after exhaustion ---
+[hart 0] kalloc after exhaustion: 0x0000000000000000
+[hart 0] expect: 0x0 (really out of memory)
+[hart 0] freed 2 pages, re-alloc'd r1=0x0000000087fb8000 r2=0x0000000087fb6000
+[hart 0] expect: r1==0x0000000087fb8000 r2==0x0000000087fb6000 (LIFO)
+[hart 0] --- test7: identity mapping ---
+[hart 0] satp=0x8000000000087fff, mode=8 (8=Sv39)
+[hart 0] expect: mode=8
+[hart 0] printf after paging ON proves identity map works
+[hart 0] --- test8: interrupt system ---
+[hart 0] initial ticks=2
+[hart 0] waiting for 5 clock interrupts...
+[hart 0] final ticks=7
+[hart 0] expect: ticks >= 7
+[hart 0] UART interrupt is ready, press some keys...
+QEMU: Terminated
+
