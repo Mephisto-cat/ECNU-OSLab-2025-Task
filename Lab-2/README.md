@@ -52,8 +52,8 @@ Sv39 三级页表，对等映射（va == pa）:
 
 walk():    遍历三级页表到叶子 PTE，alloc=1 时按需分配中间页表
 kvmmap():  逐页填写 PTE，建立 va→pa 映射
-kvminit(): hart 0 创建内核页表（映射 UART + 128MB RAM）
-kvminithart(): 各 hart 将根页表地址写入 satp 寄存器
+kvminit(): cpu 0 创建内核页表（映射 UART + 128MB RAM）
+kvminithart(): 各 cpu 将根页表地址写入 satp 寄存器
 ```
 
 ## 运行方法
@@ -169,48 +169,50 @@ printf("printf after paging ON proves identity map works\n");
 ## 关键输出
 
 ```
-[hart 0] kinit: free list built from 0x80000000 to 0x88000000
-[hart 0] kvminit: kernel page table at 0x87fff000
-[hart 0] kvminithart: satp = 0x8000000000087fff, paging enabled
-[hart 0] --- test1~7 ---
-[hart 0] === ALL TESTS PASSED ===
+cpu 0 is booting
+cpu 1 is booting
+[cpu 0] kinit: free list built from 0x80000000 to 0x88000000
+[cpu 0] kvminit: kernel page table at 0x87fff000
+[cpu 0] kvminithart: satp = 0x8000000000087fff, paging enabled
+[cpu 0] --- test1~7 ---
+[cpu 0] === ALL TESTS PASSED ===
 ```
 
 ## 所有输出
 ```
-=== Lab2: hart 0 ===
-=== Lab2: hart 1 ===
-[hart 0] kinit: free list built from 0x0000000080000000 to 0x0000000088000000
-[hart 0] kvminit: kernel page table at 0x0000000087fff000
-[hart 0] kvminithart: satp = 0x8000000000087fff, paging enabled
-[hart 1] kvminithart: satp = 0x8000000000087fff, paging enabled
-[hart 0] --- test1: basic alloc/free ---
-[hart 0] alloc  p1=0x0000000087fbb000 p2=0x0000000087fba000
-[hart 0] expect: p1≠0, p2≠0, p1≠p2
-[hart 0] free   p1=0x0000000087fbb000 p2=0x0000000087fba000
-[hart 0] --- test2: reuse after free ---
-[hart 0] re-alloc after free: p3=0x0000000087fba000
-[hart 0] expect: p3==p2 (LIFO, last freed first)
-[hart 0] --- test3: zero-fill ---
-[hart 0] zero-fill check: 0/4096 bytes non-zero
-[hart 0] expect: 0
-[hart 0] dirty-then-realloc zero check: 0/4096 bytes non-zero
-[hart 0] expect: 0
-[hart 0] --- test4: kfree rejects bad addresses ---
-[hart 0] alloc after bad frees: p4=0x0000000087fba000
-[hart 0] expect: p4≠0 (bad frees silently ignored)
-[hart 0] --- test5: exhaustion ---
-[hart 0] allocated 32689 pages before NULL
-[hart 0] expect: >1000
-[hart 0] --- test6: free-then-reuse after exhaustion ---
-[hart 0] kalloc after exhaustion: 0x0000000000000000
-[hart 0] expect: 0x0 (really out of memory)
-[hart 0] freed 2 pages, re-alloc'd r1=0x0000000087fbb000 r2=0x0000000087fb9000
-[hart 0] expect: r1==0x0000000087fbb000 r2==0x0000000087fb9000 (LIFO)
-[hart 0] --- test7: identity mapping ---
-[hart 0] satp=0x8000000000087fff, mode=8 (8=Sv39)
-[hart 0] expect: mode=8
-[hart 0] printf after paging ON proves identity map works
-[hart 0] === ALL TESTS PASSED ===
+cpu 0 is booting
+cpu 1 is booting
+[cpu 0] kinit: free list built from 0x0000000080000000 to 0x0000000088000000
+[cpu 0] kvminit: kernel page table at 0x0000000087fff000
+[cpu 0] kvminithart: satp = 0x8000000000087fff, paging enabled
+[cpu 1] kvminithart: satp = 0x8000000000087fff, paging enabled
+[cpu 0] --- test1: basic alloc/free ---
+[cpu 0] alloc  p1=0x0000000087fbb000 p2=0x0000000087fba000
+[cpu 0] expect: p1≠0, p2≠0, p1≠p2
+[cpu 0] free   p1=0x0000000087fbb000 p2=0x0000000087fba000
+[cpu 0] --- test2: reuse after free ---
+[cpu 0] re-alloc after free: p3=0x0000000087fba000
+[cpu 0] expect: p3==p2 (LIFO, last freed first)
+[cpu 0] --- test3: zero-fill ---
+[cpu 0] zero-fill check: 0/4096 bytes non-zero
+[cpu 0] expect: 0
+[cpu 0] dirty-then-realloc zero check: 0/4096 bytes non-zero
+[cpu 0] expect: 0
+[cpu 0] --- test4: kfree rejects bad addresses ---
+[cpu 0] alloc after bad frees: p4=0x0000000087fba000
+[cpu 0] expect: p4≠0 (bad frees silently ignored)
+[cpu 0] --- test5: exhaustion ---
+[cpu 0] allocated 32689 pages before NULL
+[cpu 0] expect: >1000
+[cpu 0] --- test6: free-then-reuse after exhaustion ---
+[cpu 0] kalloc after exhaustion: 0x0000000000000000
+[cpu 0] expect: 0x0 (really out of memory)
+[cpu 0] freed 2 pages, re-alloc'd r1=0x0000000087fbb000 r2=0x0000000087fb9000
+[cpu 0] expect: r1==0x0000000087fbb000 r2==0x0000000087fb9000 (LIFO)
+[cpu 0] --- test7: identity mapping ---
+[cpu 0] satp=0x8000000000087fff, mode=8 (8=Sv39)
+[cpu 0] expect: mode=8
+[cpu 0] printf after paging ON proves identity map works
+[cpu 0] === ALL TESTS PASSED ===
 QEMU: Terminated
 ```

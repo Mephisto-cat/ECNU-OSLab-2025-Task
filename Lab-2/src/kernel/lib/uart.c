@@ -25,14 +25,10 @@ void my_put(int c) {
 
 void uartinit() {
     uart[IER] = 0x00;
-
     uart[LCR] = LCR_BAUD_LATCH;
     uart[0] = 0x03;
     uart[1] = 0x00;
-
     uart[LCR] = LCR_EIGHT_BITS;
-
     uart[FCR] = FCR_FIFO_ENABLE | FCR_FIFO_CLEAR;
-
     uart[IER] = IER_TX_ENABLE;
 }
