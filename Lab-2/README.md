@@ -11,22 +11,21 @@
 
 | 文件 | 功能 |
 |---|---|
-| `page.h` | 页大小、Sv39 三级索引、PTE 标志位、地址转换宏 |
-| `memlayout.h` | 物理内存布局常量（UART=0x10000000, RAM=0x80000000~0x88000000）|
-| `kalloc.h` | 物理页分配器接口声明 |
-| `kalloc.c` | 空闲链表实现：`kinit` / `kalloc` / `kfree`，spinlock 保护 |
-| `vm.h` | 内核页表接口声明 |
-| `vm.c` | Sv39 页表遍历与映射：`walk` / `kvmmap` / `kvminit` / `kvminithart` |
+| `src/kernel/mem/type.h` | 页大小、Sv39 三级索引、PTE 标志位、地址转换宏、物理内存布局 |
+| `src/kernel/mem/mod.h` | 物理页分配器 + 内核页表接口声明 |
+| `src/kernel/mem/pmem.c` | 空闲链表实现：`kinit` / `kalloc` / `kfree`，spinlock 保护 |
+| `src/kernel/mem/kvm.c` | Sv39 页表遍历与映射：`walk` / `kvmmap` / `kvminit` / `kvminithart` |
 
 ## 改动文件
 
 | 文件 | 改动 |
 |---|---|
-| `riscv.h` | 新增 `r_satp()` / `w_satp()` / `sfence_vma()` |
+| `src/kernel/arch/method.h` | 新增 `r_satp()` / `w_satp()` / `sfence_vma()` |
+| `src/kernel/boot/start.c` | mret 前关闭 MMU 和中断委托 |
+| `src/kernel/lib/method.h` | 新增 `memset` / `memcpy` / `memcmp` 声明 |
+| `src/kernel/lib/utils.c` | 新增 `memset` / `memcpy` / `memcmp` 实现 |
 | `kernel.ld` | 新增 `PROVIDE(end = .)` 标记内核占用的内存边界 |
-| `start.c` | mret 前关闭 MMU 和中断委托 |
-| `Makefile` | OBJS 增加 `kalloc.o vm.o` |
-| `main.c` | 7 项测试覆盖全部功能 |
+| `Makefile` | 递归编译 `src/` 下所有 `.c` 和 `.S` |
 
 ## 架构设计
 
