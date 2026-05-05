@@ -1,11 +1,14 @@
-#include "printf.h"
-#include "riscv.h"
-#include "uart.h"
+#include "lib/mod.h"
+#include "arch/method.h"
 
 void main() {
     uartinit();
 
-    if (r_tp() == 0) {
+    int cpuid = r_cpuid();
+    printf("\n");
+    printf("cpu %d is booting\n", cpuid);
+
+    if (cpuid == 0) {
         printf("Hello, World!\n");
         printf("=== printf test ===\n");
         printf("%%d: %d\n", -42);
@@ -20,6 +23,7 @@ void main() {
         printf("Hello, OS!\n");
     }
 
-    for (;;)
+    for (;;) {
         wfi();
+    }
 }

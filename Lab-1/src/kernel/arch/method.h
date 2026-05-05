@@ -1,10 +1,9 @@
-#ifndef RISCV_H
-#define RISCV_H
+#pragma once
 
-#include "types.h"
+#include "arch/type.h"
 
-// 读 tp 寄存器 (hartid 从 M-mode 带下来存在这里)
-static inline uint64 r_tp(void) {
+// 读 cpuid (启动时从 mhartid 写入 tp 寄存器)
+static inline uint64 r_cpuid(void) {
     uint64 x;
     asm volatile("mv %0, tp" : "=r"(x));
     return x;
@@ -24,5 +23,3 @@ static inline void intr_off(void) {
 static inline void intr_on(void) {
     asm volatile("csrs sstatus, %0" : : "r"(2UL));
 }
-
-#endif
