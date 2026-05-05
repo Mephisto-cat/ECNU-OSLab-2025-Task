@@ -29,8 +29,8 @@ void *kalloc() {
     }
     release(&kmem.lock);
     if (r) {
-        uint64 *v = (uint64 *)r;
-        for (int i = 0; i < PGSIZE / sizeof(uint64); i++) {
+        char *v = (char *)r;
+        for (int i = 0; i < PGSIZE; i++) {
             v[i] = 0;
         }
     }
