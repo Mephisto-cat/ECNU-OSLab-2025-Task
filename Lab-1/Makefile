@@ -1,47 +1,46 @@
-CROSS_COMPILE := riscv64-linux-gnu-
-CC            := $(CROSS_COMPILE)gcc
-OBJDUMP       := $(CROSS_COMPILE)objdump
+include common.mk
 
-CFLAGS := -Wall -Wextra -O2 -g -ffreestanding -fno-common \
-	-fno-omit-frame-pointer -fno-pie -fno-pic -mno-relax \
-	-mcmodel=medany -march=rv64gc -mabi=lp64d
+C_SRCS := $(shell find src -name '*.c')
+S_SRCS := $(shell find src -name '*.S')
 
-LDFLAGS := -nostdlib -no-pie -Wl,--build-id=none \
-	-z max-page-size=4096 -T kernel.ld
+OBJS := $(C_SRCS:.c=.o) $(S_SRCS:.S=.o)
 
-OBJS := entry.o start.o main.o UART.o printf.o spinlock.o
+BUILD_DIR := build
+ELF      := $(BUILD_DIR)/kernel-qemu.elf
+ASM      := $(BUILD_DIR)/kernel.asm
 
-all: kernel-qemu.elf kernel.asm
+all: $(ELF) $(ASM)
 
-entry.o: entry.S
+%.o: %.S
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-kernel-qemu.elf: $(OBJS) kernel.ld
+$(ELF): $(OBJS) kernel.ld
+	@mkdir -p $(BUILD_DIR)
 	$(CC) $(LDFLAGS) -o $@ $(OBJS)
 
-kernel.asm: kernel-qemu.elf
+$(ASM): $(ELF)
 	$(OBJDUMP) -S $< > $@
 
-run: kernel-qemu.elf
+run: $(ELF)
 	qemu-system-riscv64 \
 		-machine virt \
 		-bios none \
-		-kernel kernel-qemu.elf \
+		-kernel $(ELF) \
 		-m 128M \
 		-smp 2 \
 		-nographic
 
-qemu-gdb: kernel-qemu.elf
+qemu-gdb: $(ELF)
 	qemu-system-riscv64 \
 		-machine virt \
 		-bios none \
-		-kernel kernel-qemu.elf \
+		-kernel $(ELF) \
 		-m 128M \
 		-smp 1 \
 		-S -gdb tcp::1234 \
 		-nographic
 
 clean:
-	rm -f *.o *.elf *.asm
+	rm -f $(OBJS) $(ELF) $(ASM)
 
 .PHONY: all run qemu-gdb clean
