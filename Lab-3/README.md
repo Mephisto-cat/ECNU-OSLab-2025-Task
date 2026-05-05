@@ -12,25 +12,24 @@
 
 | 文件 | 功能 |
 |---|---|
-| `trap.h` | trapframe 结构体（保存 32 个 GPR + sepc/sstatus/scause/stval）、陷阱/时钟接口声明 |
-| `trap_entry.S` | S-mode 陷阱入口 `kernel_vector`：寄存器保存 → 切内核栈 → 调 C handler → 恢复 → sret |
-| `trap.c` | 陷阱初始化 + `trap_kernel_handler` switch-case 分发（software/external interrupt）|
-| `plic.h` / `plic.c` | PLIC 驱动：`plic_init` / `plic_inithart` / `plic_claim` / `plic_complete` |
-| `timer_entry.S` | M-mode 时钟中断入口 `timer_vector`：更新 MTIMECMP → 置 SSIP → mret |
-| `timer.c` | `timer_init` 初始化首个 mtimecmp + `clock_intr` S-mode 时钟 tick 处理 |
+| `src/kernel/trap/type.h` | trapframe 结构体 + PLIC/CLINT 寄存器偏移定义 |
+| `src/kernel/trap/mod.h` | 陷阱/时钟/PLIC 接口声明 |
+| `src/kernel/trap/trap.S` | S-mode 陷阱入口 `kernel_vector` |
+| `src/kernel/trap/trap_kernel.c` | 陷阱初始化 + 中断分发 |
+| `src/kernel/trap/plic.c` | PLIC 驱动 |
+| `src/kernel/trap/timer.c` | M-mode `timer_vector` + `timer_init` + `clock_intr` |
 
 ## 改动文件
 
 | 文件 | 改动 |
 |---|---|
-| `riscv.h` | 新增 `r_mhartid()` / `r_scause()` / `r_sepc()` / `w_sepc()` |
-| `memlayout.h` | 新增 `PLIC` (0x0c000000L) 和 `CLINT` (0x02000000L) 地址宏 |
-| `uart.h` | 新增 `uart_intr()` 声明 |
-| `UART.c` | 新增 `IER_RX_ENABLE` / `LSR_RX_READY` 宏，uartinit 使能 RX 中断，新增 `uart_intr()` |
-| `start.c` | 配置 mideleg (委托 SSIP/STIP/SEIP)、mtvec → timer_vector、mie (MTIE)、mcounteren、MPIE=1 |
-| `vm.c` | `kvminit` 新增 PLIC (0x0c000000~0x1000000) 和 CLINT (0x02000000~0x0210000) 对等映射 |
-| `main.c` | 新增 trap/plic 初始化调用 + timer_init + test8 中断验证 |
-| `Makefile` | OBJS 增加 `trap_entry.o trap.o plic.o timer_entry.o timer.o` |
+| `src/kernel/arch/type.h` | 新增 `MIE_MTIE` / `MIP_SSIP` / `SIE_SSIE` / `SIE_STIE` / `SIE_SEIE` 宏 |
+| `src/kernel/arch/method.h` | 新增 `r_scause()` / `r_sepc()` / `w_sepc()` / `r_stval()` |
+| `src/kernel/boot/start.c` | 配置 mideleg、mtvec→timer_vector、mie(MTIE)、mcounteren、MPIE=1 |
+| `src/kernel/lib/uart.c` | uartinit 使能 RX 中断，新增 `uart_intr()` |
+| `src/kernel/mem/type.h` | 新增 `PLIC` / `CLINT` 地址宏 |
+| `src/kernel/mem/kvm.c` | `kvminit` 新增 PLIC + CLINT 对等映射 |
+| `src/kernel/main.c` | 新增 trap/plic 初始化 + timer_init + test8 |
 
 ## 实现逻辑链
 
@@ -69,7 +68,7 @@ trap_return:
 
 **实现（trap.c）：** `trap_kernel_handler` 读 `scause` 的最高位判中断/异常，低 8 位是中断号，用 switch 分派。目前只处理两种：code 1 → `clock_intr`（软件中断，由时钟触发），code 9 → `external_interrupt_handler`（外部中断，由 PLIC 转发）。
 
-**初始化：** `trap_kernel_init`（hart 0 调用一次）→ 设 stvec、配 PLIC 全局优先级。`trap_kernel_inithart`（每 hart 各调一次）→ 写 sscratch（指向自己的 trapframe）、写 stvec、使能 sie、调 `intr_on` 开全局中断。
+**初始化：** `trap_kernel_init`（cpu 0 调用一次）→ 设 stvec、配 PLIC 全局优先级。`trap_kernel_inithart`（每 cpu 各调一次）→ 写 sscratch（指向自己的 trapframe）、写 stvec、使能 sie、调 `intr_on` 开全局中断。
 
 ### 第二层：时钟中断
 
@@ -90,7 +89,7 @@ M-mode 侧（timer_entry.S）— 只做硬件维护：
 timer_vector:
     rdtime                 // 读当前 MTIME
     + INTERVAL             // 加 10M cycles (= 10ms @1GHz)
-    写 hart 的 MTIMECMP    // 闹钟拨到 10ms 后
+    写 cpu 的 MTIMECMP    // 闹钟拨到 10ms 后
     csrs mip, 2            // 置 S-mode 软件中断 pending
     mret
 ```
@@ -117,12 +116,12 @@ void clock_intr() {
 
 时钟是内部中断，串口是外部中断。外部中断需要一个**路由器**——多个外设共享同一根外部中断线，CPU 需要知道"谁触发的中断"。
 
-**要解决的问题：** UART 收到按键 → 中断信号 → 经过 PLIC 路由到某个 hart → hart 的外部中断处理函数 → 读 PLIC claim 寄存器得知是 irq 10 → 调 `uart_intr` → 读完数据 → 通知 PLIC 处理完毕。
+**要解决的问题：** UART 收到按键 → 中断信号 → 经过 PLIC 路由到某个 cpu → cpu 的外部中断处理函数 → 读 PLIC claim 寄存器得知是 irq 10 → 调 `uart_intr` → 读完数据 → 通知 PLIC 处理完毕。
 
 **实现（plic.c）：**
 
 - `plic_init`：设 UART0 (irq=10) 优先级 = 1（只要 >0 就能触发）
-- `plic_inithart`：为当前 hart 的 enable 位图里开 bit 10；设阈值 = 0（收所有优先级的中断）
+- `plic_inithart`：为当前 cpu 的 enable 位图里开 bit 10；设阈值 = 0（收所有优先级的中断）
 - `plic_claim` / `plic_complete`：读 claim 寄存器获取中断号；处理完写回同一个地址告知 PLIC
 
 **实现（UART.c 改造）：**
@@ -135,18 +134,18 @@ void clock_intr() {
 ### 为什么 main.c 的初始化是这个顺序
 
 ```c
-// hart 0
+// cpu 0
 uartinit()           // UART 早于一切，printf 依赖它
 kinit()              // 物理页分配器，页表创建依赖它
 kvminit()            // 内核页表（含 PLIC/CLINT 映射），开 MMU 依赖它
 trap_kernel_init()   // stvec + PLIC 全局配置，中断分发依赖它
-                     // → kvminit_done = 1，hart 1 可以继续了
+                     // → kvminit_done = 1，cpu 1 可以继续了
 
-// 每 hart
+// 每 cpu
 kvminithart()        // 启用 MMU ← PLIC/CLINT 映射已就绪
 trap_kernel_inithart() // sscratch/stvec/sie/intr_on ← stvec 已配好，sscratch 已可写
 
-// hart 0
+// cpu 0
 timer_init()         // 首个 mtimecmp ← CLINT 已映射，stvec 已配好
 // test8: 等 5 个 tick ← 整条链路首次实战
 ```
@@ -202,12 +201,14 @@ MTIMECMP → M-mode timer IRQ → timer_vector 更新闹钟 → 置 SSIP
 ## 关键输出
 
 ```
-[hart 0] initial ticks=2
-[hart 0] waiting for 5 clock interrupts...
+cpu 0 is booting
+cpu 1 is booting
+[cpu 0] initial ticks=2
+[cpu 0] waiting for 5 clock interrupts...
 
-[hart 0] final ticks=7
-[hart 0] expect: ticks >= 7
-[hart 0] UART interrupt is ready, press some keys...
+[cpu 0] final ticks=7
+[cpu 0] expect: ticks >= 7
+[cpu 0] UART interrupt is ready, press some keys...
 [UART intr] received: '1'
 [UART intr] received: '2'
 [UART intr] received: '3'
@@ -215,28 +216,28 @@ MTIMECMP → M-mode timer IRQ → timer_vector 更新闹钟 → 置 SSIP
 [UART intr] received: '5'
 [UART intr] received: '6'
 [UART intr] received: '7'
-[hart 0] --- test8 done ---
-[hart 0] === ALL TESTS PASSED ===
+[cpu 0] --- test8 done ---
+[cpu 0] === ALL TESTS PASSED ===
 ```
 
 ## 全部输出
 
 ```
-=== Lab3: hart 1 ===
-=== Lab3: hart 0 ===
-[hart 0] kinit: free list built from 0x0000000080000000 to 0x0000000088000000
-[hart 0] kvminit: kernel page table at 0x0000000087fff000
-[hart 1] kvminithart: satp = 0x8000000000087fff, paging enabled
-[hart 0] trap_kernel_init: stvec set, PLIC inited
-[hart 0] kvminithart: satp = 0x8000000000087fff, paging enabled
-[hart 1] trap_kernel_inithart: interrupts enabled
-[hart 0] trap_kernel_inithart: interrupts enabled
-[hart 0] --- test8: interrupt system ---
-[hart 0] initial ticks=2
-[hart 0] waiting for 5 clock interrupts...
-[hart 0] final ticks=7
-[hart 0] expect: ticks >= 7
-[hart 0] UART interrupt is ready, press some keys...
+cpu 0 is booting
+cpu 1 is booting
+[cpu 0] kinit: free list built from 0x0000000080000000 to 0x0000000088000000
+[cpu 0] kvminit: kernel page table at 0x0000000087fff000
+[cpu 1] kvminithart: satp = 0x8000000000087fff, paging enabled
+[cpu 0] trap_kernel_init: stvec set, PLIC inited
+[cpu 0] kvminithart: satp = 0x8000000000087fff, paging enabled
+[cpu 1] trap_kernel_inithart: interrupts enabled
+[cpu 0] trap_kernel_inithart: interrupts enabled
+[cpu 0] --- test8: interrupt system ---
+[cpu 0] initial ticks=2
+[cpu 0] waiting for 5 clock interrupts...
+[cpu 0] final ticks=7
+[cpu 0] expect: ticks >= 7
+[cpu 0] UART interrupt is ready, press some keys...
 [UART intr] received: '1'
 [UART intr] received: '2'
 [UART intr] received: '3'
@@ -244,33 +245,26 @@ MTIMECMP → M-mode timer IRQ → timer_vector 更新闹钟 → 置 SSIP
 [UART intr] received: '5'
 [UART intr] received: '6'
 [UART intr] received: '7'
-[hart 0] --- test8 done ---
-[hart 0] === ALL TESTS PASSED ===
+[cpu 0] --- test8 done ---
+[cpu 0] === ALL TESTS PASSED ===
 QEMU: Terminated
 ```
 
-## 功能与代码对照（checkpoint-1）
+## 功能与代码对照
 
 | 功能 | 文件 | 关键函数/变量 |
 |------|------|--------------|
-| 陷阱入口 | `trap_entry.S` | `kernel_vector`, `trap_return` |
-| 上下文保存结构体 | `trap.h` | `struct trapframe` (32 GPR + sepc/sstatus/scause/stval) |
-| 陷阱初始化 (全局) | `trap.c` | `trap_kernel_init` → 设 stvec, 调 `plic_init` |
-| 陷阱 per-hart 配置 | `trap.c` | `trap_kernel_inithart` → 写 sscratch/stvec/sie, 调 `plic_inithart`, `intr_on` |
-| 中断分发 | `trap.c` | `trap_kernel_handler` → switch(scause): 1→`clock_intr`, 9→`external_interrupt_handler` |
-| 外部中断分派 | `trap.c` | `external_interrupt_handler` → `plic_claim` → `uart_intr` / `plic_complete` |
-| PLIC 全局配置 | `plic.c` | `plic_init` → 设 UART0 (irq=10) 优先级 |
-| PLIC per-hart 配置 | `plic.c` | `plic_inithart` → 使能 UART0 中断, 设阈值=0 |
-| PLIC 中断声明/完成 | `plic.c` | `plic_claim`, `plic_complete` |
-| PLIC 寄存器布局 | `plic.c` | 偏移宏: `PLIC_PRIORITY/ENABLE/THRESHOLD/CLAIM` |
-| M-mode 时钟入口 | `timer_entry.S` | `timer_vector` → rdtime, 更新 MTIMECMP, csrs mip 置 SSIP, mret |
-| 时钟初始化 | `timer.c` | `timer_init` → 读 CLINT MTIME, 写首个 MTIMECMP |
-| 时钟 tick 处理 | `timer.c` | `clock_intr` → `ticks++`, csrc sip 清 SSIP |
-| 串口发送 | `UART.c` | `my_put` → 忙等 TX 空闲, 写 THR |
-| 串口初始化 | `UART.c` | `uartinit` → 设波特率/8N1/FIFO/IER (RX+TX 中断) |
-| 串口中断接收 | `UART.c` | `uart_intr` → 读 LSR, 读 RHR, 回显 |
-| M-mode 启动配置 | `start.c` | `start` → mideleg, mtvec→timer_vector, mie(MTIE), mcounteren, MPIE=1 |
-| 地址宏 | `memlayout.h` | `PLIC` (0x0c000000), `CLINT` (0x02000000) |
-| CSR 操作 | `riscv.h` | `r_scause`, `r_sepc`, `w_sepc`, `r_mhartid` |
-| 内核页表扩展 | `vm.c` | `kvminit` → `kvmmap` PLIC + CLINT 对等映射 |
-| 测试 (时钟+串口) | `main.c` | `timer_init`, `ticks` 忙等循环, UART 交互窗口 |
+| 陷阱入口 | `src/kernel/trap/trap.S` | `kernel_vector`, `trap_return` |
+| 上下文保存结构体 | `src/kernel/trap/type.h` | `struct trapframe` (32 GPR + sepc/sstatus/scause/stval) |
+| 陷阱初始化 (全局) | `src/kernel/trap/trap_kernel.c` | `trap_kernel_init` → 设 stvec, 调 `plic_init` |
+| 陷阱 per-cpu 配置 | `src/kernel/trap/trap_kernel.c` | `trap_kernel_inithart` → 写 sscratch/stvec/sie, `intr_on` |
+| 中断分发 | `src/kernel/trap/trap_kernel.c` | `trap_kernel_handler` → switch(scause): 1→`clock_intr`, 9→`external_interrupt_handler` |
+| 外部中断分派 | `src/kernel/trap/trap_kernel.c` | `external_interrupt_handler` → `plic_claim` → `uart_intr` / `plic_complete` |
+| PLIC 驱动 | `src/kernel/trap/plic.c` | `plic_init` / `plic_inithart` / `plic_claim` / `plic_complete` |
+| M-mode 时钟入口 | `src/kernel/trap/timer.c` | `timer_vector` → rdtime, 更新 MTIMECMP, csrs mip 置 SSIP, mret |
+| 时钟初始化 + tick | `src/kernel/trap/timer.c` | `timer_init` / `clock_intr` |
+| 串口 | `src/kernel/lib/uart.c` | `uartinit` / `my_put` / `uart_intr` |
+| M-mode 启动配置 | `src/kernel/boot/start.c` | `start` → mideleg, mtvec→timer_vector, mie(MTIE), mcounteren, MPIE=1 |
+| 地址宏 + 中断宏 | `src/kernel/arch/type.h` / `src/kernel/mem/type.h` | `MIE_MTIE` / `PLIC` / `CLINT` |
+| 内核页表扩展 | `src/kernel/mem/kvm.c` | `kvminit` → `kvmmap` PLIC + CLINT 对等映射 |
+| 测试 (时钟+串口) | `src/kernel/main.c` | `timer_init`, `ticks` 忙等循环, UART 交互窗口 |
