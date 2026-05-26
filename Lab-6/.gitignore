@@ -1,0 +1,7 @@
+target
+.gdbinit
+build/
+*.o
+*.d
+src/user/initcode.h
+test-logs/
